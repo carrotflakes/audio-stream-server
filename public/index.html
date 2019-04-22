@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>audio-stream-server</title>
+</head>
+<body>
+  <button onClick="start()">start</button>
+<script>
+let ws = null;
+const buffers = [];
+let bufferI = 0;
+function connect() {
+  ws = new WebSocket("ws://localhost:3001/");
+  ws.onmessage = e => {
+    if (e.data instanceof Blob) {
+      const fileReader = new FileReader();
+      fileReader.onloadend = () => {
+        const array = new Int32Array(fileReader.result);
+        buffers.push(array);
+      };
+      fileReader.readAsArrayBuffer(e.data);
+    }
+  };
+  ws.onopen = () => {ws.send('start')};
+  ws.onerror = e => {console.log(e)};
+}
+
+function start() {
+  const ctx = new AudioContext();
+  let p = 0;
+  const bufferSize = 4096;
+  const scriptNode = ctx.createScriptProcessor(bufferSize, 1, 2);
+  scriptNode.onaudioprocess = e => {
+  const buffer = e.outputBuffer;
+  const array0 = buffer.getChannelData(0);
+  const array1 = buffer.getChannelData(1);
+  const sampleRate = ctx.sampleRate;
+
+  for (let i = 0; buffers.length && i < bufferSize; ++i) {
+    array1[i] = array0[i] = buffers[0][bufferI++] / 2**31;
+    if (buffers[0].length <= bufferI) {
+      buffers.shift();
+      bufferI = 0;
+    }
+  }
+};
+scriptNode.connect(ctx.destination);
+
+  connect();
+}
+
+</script>
+</body>
+</html>
